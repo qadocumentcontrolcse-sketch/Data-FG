@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FG Monitoring — Kartu Stok & Rekap PO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #0F1117;
+  --surface:   #1A1D27;
+  --surface2:  #22263A;
+  --surface3:  #2A2F45;
+  --border:    #2E3350;
+  --border2:   #3A4060;
+
+  --teal:      #2DD4BF;
+  --teal-dim:  rgba(45,212,191,.12);
+  --teal-glow: rgba(45,212,191,.25);
+
+  --amber:     #F59E0B;
+  --amber-dim: rgba(245,158,11,.12);
+
+  --rose:      #FB7185;
+  --rose-dim:  rgba(251,113,133,.12);
+
+  --green:     #34D399;
+  --green-dim: rgba(52,211,153,.12);
+
+  --violet:    #A78BFA;
+  --violet-dim:rgba(167,139,250,.12);
+
+  --text:      #E8ECF4;
+  --text2:     #8892B0;
+  --text3:     #4A5475;
+
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Plus Jakarta Sans', sans-serif;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+
+/* ── TOPBAR ── */
+.topbar {
+  background: rgba(26,29,39,.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+  position: sticky; top: 0; z-index: 100;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-logo {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, var(--teal), #0EA5E9);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 15px; color: #0F1117;
+  box-shadow: 0 0 18px var(--teal-glow);
+}
+.brand-name { font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -.2px; }
+.brand-desc { font-size: 11px; color: var(--text2); }
+
+.topbar-right { display: flex; align-items: center; gap: 14px; }
+.sync-info { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text2); }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dot.ok    { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.dot.err   { background: var(--rose); }
+.dot.loading { background: var(--amber); animation: blink 1s ease-in-out infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+.refresh-btn {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--teal-dim);
+  color: var(--teal);
+  border: 1px solid var(--teal-glow);
+  border-radius: var(--radius-sm);
+  padding: 7px 16px;
+  font-size: 12px; font-weight: 600; font-family: var(--sans);
+  cursor: pointer;
+  transition: all .2s;
+}
+.refresh-btn:hover:not(:disabled) {
+  background: var(--teal);
+  color: #0F1117;
+  box-shadow: 0 0 14px var(--teal-glow);
+}
+.refresh-btn:disabled { opacity: .45; cursor: default; }
+.spin { display: inline-block; }
+.refresh-btn.spinning .spin { animation: spin .6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── NAV ── */
+.nav {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 28px;
+  display: flex; gap: 4px;
+}
+.nav-tab {
+  padding: 14px 20px;
+  font-size: 13px; font-weight: 600;
+  color: var(--text2);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all .15s;
+  user-select: none;
+  display: flex; align-items: center; gap: 7px;
+}
+.nav-tab:hover { color: var(--teal); }
+.nav-tab.active { color: var(--teal); border-bottom-color: var(--teal); }
+.tab-icon { font-size: 15px; }
+
+/* ── MAIN ── */
+.main { padding: 28px; max-width: 1600px; margin: 0 auto; }
+.section { display: none; }
+.section.active { display: block; }
+
+/* ── CONTROLS ── */
+.controls { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+
+.sel-wrap { position: relative; flex: 1; min-width: 220px; max-width: 460px; }
+.sel-wrap select {
+  width: 100%;
+  appearance: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 38px 10px 14px;
+  font-size: 13px; font-family: var(--sans); font-weight: 500;
+  color: var(--text);
+  cursor: pointer; outline: none;
+  transition: border-color .15s;
+}
+.sel-wrap select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-dim); }
+.sel-wrap::after {
+  content: '▾';
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--text2); pointer-events: none; font-size: 11px;
+}
+.sel-wrap select option { background: var(--surface2); }
+
+.search-inp {
+  flex: 1; min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px 10px 38px;
+  font-size: 13px; font-family: var(--sans);
+  color: var(--text); outline: none;
+  transition: border-color .15s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%238892B0' stroke-width='1.5' d='M17.5 17.5l-3.5-3.5m0 0A6 6 0 1 0 3.5 3.5a6 6 0 0 0 8.5 8.5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 12px center;
+  background-size: 16px;
+}
+.search-inp:focus { border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-dim); }
+.search-inp::placeholder { color: var(--text3); }
+
+/* ── FILTER CHIPS ── */
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+.chip {
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  font-size: 11px; font-weight: 600;
+  cursor: pointer;
+  color: var(--text2);
+  background: transparent;
+  transition: all .15s;
+  letter-spacing: .2px;
+}
+.chip:hover { border-color: var(--teal); color: var(--teal); }
+.chip.active { background: var(--teal); color: #0F1117; border-color: var(--teal); box-shadow: 0 0 10px var(--teal-glow); }
+
+/* ── STAT CARDS ── */
+.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 14px; margin-bottom: 22px; }
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+  transition: transform .15s;
+}
+.stat-card:hover { transform: translateY(-2px); }
+.stat-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 2px;
+}
+.stat-card.c-teal::before { background: linear-gradient(90deg, var(--teal), transparent); }
+.stat-card.c-amber::before { background: linear-gradient(90deg, var(--amber), transparent); }
+.stat-card.c-rose::before { background: linear-gradient(90deg, var(--rose), transparent); }
+.stat-card.c-green::before { background: linear-gradient(90deg, var(--green), transparent); }
+.stat-card.c-violet::before { background: linear-gradient(90deg, var(--violet), transparent); }
+
+.stat-icon { font-size: 22px; margin-bottom: 10px; }
+.stat-val {
+  font-family: var(--mono);
+  font-size: 22px; font-weight: 500;
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+.stat-card.c-teal .stat-val { color: var(--teal); }
+.stat-card.c-amber .stat-val { color: var(--amber); }
+.stat-card.c-rose .stat-val { color: var(--rose); }
+.stat-card.c-green .stat-val { color: var(--green); }
+.stat-card.c-violet .stat-val { color: var(--violet); }
+.stat-lbl { font-size: 11px; color: var(--text2); font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
+
+/* ── KARTU PRODUK HEADER ── */
+.kartu-header {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  margin-bottom: 18px;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
+  flex-wrap: wrap;
+  position: relative; overflow: hidden;
+}
+.kartu-header::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at top left, var(--teal-dim), transparent 60%);
+  pointer-events: none;
+}
+.kartu-info {}
+.kartu-name { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.kartu-cpb { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+.kartu-meta { font-size: 11px; color: var(--text3); }
+.kartu-mini-stats { display: flex; gap: 12px; flex-wrap: wrap; }
+.mini-stat {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 18px;
+  text-align: center; min-width: 100px;
+}
+.mini-val { font-family: var(--mono); font-size: 20px; font-weight: 600; }
+.mini-val.in  { color: var(--green); }
+.mini-val.out { color: var(--rose); }
+.mini-val.rem { color: var(--teal); }
+.mini-lbl { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .5px; margin-top: 3px; }
+
+/* ── TABLE ── */
+.tbl-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: auto;
+}
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  padding: 11px 14px;
+  text-align: left;
+  font-size: 10.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .6px;
+  color: var(--text3);
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  position: sticky; top: 0; z-index: 2;
+}
+thead th.r { text-align: right; }
+tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: var(--surface2); }
+tbody td { padding: 10px 14px; font-size: 12.5px; vertical-align: middle; }
+td.r { text-align: right; }
+td.mono { font-family: var(--mono); font-size: 11.5px; }
+td.muted { color: var(--text2); }
+td.dim { color: var(--text3); }
+td.in-val { font-family: var(--mono); font-weight: 600; color: var(--green); text-align: right; }
+td.out-val { font-family: var(--mono); font-weight: 600; color: var(--rose); text-align: right; }
+td.rem-val { font-family: var(--mono); font-weight: 700; text-align: right; }
+
+.row-masuk td { }
+.row-keluar td { }
+
+/* Zebra subtle */
+tbody tr:nth-child(even) { background: rgba(255,255,255,.013); }
+tbody tr:nth-child(even):hover { background: var(--surface2); }
+
+/* ── BATCH TAG ── */
+.batch-tag {
+  display: inline-flex; align-items: center;
+  background: var(--violet-dim);
+  color: var(--violet);
+  border: 1px solid rgba(167,139,250,.2);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-family: var(--mono);
+  font-size: 11px; font-weight: 500;
+}
+
+/* ── TYPE PILL ── */
+.type-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  border-radius: 99px;
+  padding: 3px 10px;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+}
+.type-pill.in { background: var(--green-dim); color: var(--green); }
+.type-pill.out { background: var(--rose-dim); color: var(--rose); }
+
+/* ── BADGE STATUS ── */
+.badge {
+  display: inline-flex; align-items: center;
+  border-radius: 99px;
+  padding: 3px 10px;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+}
+.badge-closed { background: var(--green-dim); color: var(--green); }
+.badge-proses { background: var(--teal-dim); color: var(--teal); }
+.badge-open   { background: var(--amber-dim); color: var(--amber); }
+.badge-other  { background: var(--surface3); color: var(--text2); }
+
+/* ── EMPTY ── */
+.empty {
+  text-align: center; padding: 70px 20px;
+}
+.empty-gfx { font-size: 48px; margin-bottom: 14px; opacity: .5; }
+.empty-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+.empty-sub { font-size: 13px; color: var(--text2); }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed; bottom: 24px; right: 24px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  padding: 12px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 500;
+  z-index: 999;
+  transform: translateY(80px); opacity: 0;
+  transition: all .25s cubic-bezier(.34,1.56,.64,1);
+  max-width: 320px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { border-color: var(--green); }
+.toast.error { border-color: var(--rose); }
+
+/* ── TRUNCATE ── */
+.trunc { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .main { padding: 16px; }
+  .topbar { padding: 0 16px; }
+  .nav { padding: 0 16px; }
+  .kartu-header { flex-direction: column; }
+  .brand-desc { display: none; }
+}
+
+  /* ── LOGIN PAGE ── */
+  .login-page {
+    display: none;
+    min-height: 100vh;
+    background: var(--bg);
+    align-items: center;
+    justify-content: center;
+  }
+  .login-page.active { display: flex; }
+  .login-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px 36px;
+    width: 100%;
+    max-width: 380px;
+    position: relative;
+    overflow: hidden;
+  }
+  .login-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--teal), #0EA5E9, var(--violet));
+  }
+  .login-logo {
+    width: 52px; height: 52px;
+    background: linear-gradient(135deg, var(--teal), #0EA5E9);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 800; color: #0F1117;
+    margin: 0 auto 20px;
+    box-shadow: 0 0 28px var(--teal-glow);
+  }
+  .login-title { text-align: center; font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .login-sub { text-align: center; font-size: 12px; color: var(--text2); margin-bottom: 28px; }
+  .login-field { margin-bottom: 14px; }
+  .login-field label { display: block; font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+  .login-field input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 11px 14px;
+    font-size: 14px; font-family: var(--sans);
+    color: var(--text); outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .login-field input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-dim); }
+  .login-btn {
+    width: 100%;
+    background: linear-gradient(135deg, var(--teal), #0EA5E9);
+    color: #0F1117;
+    border: none; border-radius: 8px;
+    padding: 12px;
+    font-size: 14px; font-weight: 700; font-family: var(--sans);
+    cursor: pointer; margin-top: 8px;
+    transition: all .2s;
+    letter-spacing: .2px;
+  }
+  .login-btn:hover { opacity: .9; box-shadow: 0 0 20px var(--teal-glow); transform: translateY(-1px); }
+  .login-btn:disabled { opacity: .5; cursor: default; transform: none; }
+  .login-err {
+    background: var(--rose-dim);
+    border: 1px solid rgba(251,113,133,.3);
+    color: var(--rose);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    margin-top: 14px;
+    display: none;
+    text-align: center;
+  }
+  .login-err.show { display: block; }
+  .login-footer { text-align: center; font-size: 11px; color: var(--text3); margin-top: 24px; }
+
+  /* ── APP (hidden saat login) ── */
+  .app-wrap { display: none; }
+  .app-wrap.active { display: block; }
+
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+
+<!-- LOGIN PAGE -->
+<div class="login-page" id="loginPage">
+  <div class="login-card">
+    <div class="login-logo">FG</div>
+    <div class="login-title">FG Monitoring</div>
+    <div class="login-sub">Masuk untuk mengakses data Kartu Stok & Rekap PO</div>
+    <div class="login-field">
+      <label>Username</label>
+      <input type="text" id="loginUser" placeholder="Masukkan username" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
+    </div>
+    <div class="login-field">
+      <label>Password</label>
+      <input type="password" id="loginPass" placeholder="Masukkan password" autocomplete="current-password" onkeydown="if(event.key==='Enter')submitLogin()">
+    </div>
+    <button class="login-btn" id="loginBtn" onclick="submitLogin()">Masuk</button>
+    <div class="login-err" id="loginErr"></div>
+    <div class="login-footer">CSE R&D — FG Monitoring System</div>
+  </div>
+</div>
+
+<!-- APP WRAPPER -->
+<div class="app-wrap" id="appWrap">
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-logo">FG</div>
+    <div>
+      <div class="brand-name">FG Monitoring</div>
+      <div class="brand-desc">Kartu Stok & Rekap PO</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="sync-info">
+      <span class="dot loading" id="syncDot"></span>
+      <span id="syncText">Memuat data…</span>
+    </div>
+    <button class="refresh-btn" id="syncBtn" onclick="loadData()" disabled>
+      <span class="spin">⟳</span> Refresh
+    </button>
+    <button onclick="logout()" style="background:var(--rose-dim);color:var(--rose);border:1px solid rgba(251,113,133,.3);border-radius:var(--radius-sm);padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--sans);transition:all .15s;" onmouseover="this.style.background='var(--rose)';this.style.color='#0f1117'" onmouseout="this.style.background='var(--rose-dim)';this.style.color='var(--rose)'">Logout</button>
+  </div>
+</header>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-tab active" onclick="switchTab('kartu')">
+    <span class="tab-icon">📦</span> Kartu Stok
+  </div>
+  <div class="nav-tab" onclick="switchTab('rekap')">
+    <span class="tab-icon">📋</span> Rekap PO
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- ═══ KARTU STOK ═══ -->
+  <section class="section active" id="sec-kartu">
+    <div class="controls">
+      <div class="sel-wrap" style="max-width:480px;">
+        <select id="produkSelect" onchange="renderKartu()">
+          <option value="">— Pilih Produk —</option>
+        </select>
+      </div>
+    </div>
+    <div id="kartu-content">
+      <div class="empty">
+        <div class="empty-gfx">📦</div>
+        <div class="empty-title">Pilih Produk</div>
+        <div class="empty-sub">Pilih nama produk dari dropdown di atas untuk melihat kartu stok</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ REKAP PO ═══ -->
+  <section class="section" id="sec-rekap">
+    <div class="controls">
+      <input class="search-inp" id="rekapSearch" type="text" placeholder="Cari produk, No. PO, customer…" oninput="renderRekap()">
+      <div class="sel-wrap" style="max-width:210px;">
+        <select id="rekapCustomer" onchange="renderRekap()">
+          <option value="">Semua Customer</option>
+        </select>
+      </div>
+    </div>
+    <div class="chips">
+      <span class="chip active" onclick="setStatusFilter('',this)">Semua</span>
+      <span class="chip" onclick="setStatusFilter('CLOSED',this)">✓ Closed</span>
+      <span class="chip" onclick="setStatusFilter('ON PROSES',this)">⚙ On Proses</span>
+      <span class="chip" onclick="setStatusFilter('OPEN',this)">○ Open</span>
+    </div>
+    <div class="stats-row" id="rekapStats"></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Customer</th>
+            <th>Tgl PO</th>
+            <th>No. PO</th>
+            <th>Nama Item Di PO</th>
+            <th>Nama Item di CPB</th>
+            <th class="r">QTY PO</th>
+            <th>UOM</th>
+            <th>Tgl Kirim History</th>
+            <th class="r">Qty Kirim</th>
+            <th>Status</th>
+            <th>Catatan</th>
+          </tr>
+        </thead>
+        <tbody id="rekapBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+</div> <!-- /app-wrap -->
+
+<script>
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx0aLQ3WYfZZn0XqpnnxTYaonMo99A7ohoKP8vKCypjn86Q3TVC1dfm2lC5w67-WBc8/exec';
+const SHEETS = { masuk: 'Masuk', keluar: 'Keluar', rekap: 'Rekap PO' };
+
+let dataMasuk=[], dataKeluar=[], dataRekap=[];
+let activeTab='kartu', statusFilter='';
+
+/* ── AUTH ── */
+function getSavedCreds() {
+  try { return JSON.parse(sessionStorage.getItem('fg_creds') || 'null'); } catch(e) { return null; }
+}
+function saveCreds(u, p) {
+  sessionStorage.setItem('fg_creds', JSON.stringify({ u, p }));
+}
+function clearCreds() {
+  sessionStorage.removeItem('fg_creds');
+}
+
+async function doLogin(username, password) {
+  const url = APPS_SCRIPT_URL + '?action=login&username=' + encodeURIComponent(username) + '&password=' + encodeURIComponent(password);
+  const res = await fetch(url);
+  const json = await res.json();
+  return json;
+}
+
+/* ── FETCH via Apps Script (dengan credentials) ── */
+async function fetchSheet(name) {
+  const creds = getSavedCreds();
+  if (!creds) throw new Error('Belum login');
+  const url = APPS_SCRIPT_URL + '?sheet=' + encodeURIComponent(name) + '&username=' + encodeURIComponent(creds.u) + '&password=' + encodeURIComponent(creds.p);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Gagal fetch sheet "' + name + '" dari Apps Script.');
+  const json = await res.json();
+  if (json.code === 401) { clearCreds(); showLoginPage(); throw new Error('Sesi habis, silakan login ulang'); }
+  if (json.error) throw new Error(json.error);
+  return json.data;
+}
+
+function toDate(v) {
+  if (v === null || v === undefined || v === '') return '';
+  // Apps Script returns numbers directly for dates
+  const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/"/g,'').trim());
+  if (!isNaN(n) && n > 10000) {
+    const d = new Date((n - 25569) * 86400 * 1000);
+    return d.toLocaleDateString('id-ID', {day:'numeric', month:'numeric', year:'numeric'});
+  }
+  return String(v);
+}
+function num(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  if (typeof v === 'number') return v;
+  return parseFloat(String(v).replace(/"/g,'').trim()) || 0;
+}
+function str(v) {
+  if (v === null || v === undefined) return '';
+  return String(v).replace(/^"|"$/g,'').trim();
+}
+
+/* ── LOAD ── */
+
+/* ── LOGIN UI FUNCTIONS ── */
+function showLoginPage() {
+  document.getElementById('loginPage').classList.add('active');
+  document.getElementById('appWrap').classList.remove('active');
+  setTimeout(() => document.getElementById('loginUser').focus(), 100);
+}
+
+function showApp() {
+  document.getElementById('loginPage').classList.remove('active');
+  document.getElementById('appWrap').classList.add('active');
+}
+
+async function submitLogin() {
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value.trim();
+  const err = document.getElementById('loginErr');
+  const btn = document.getElementById('loginBtn');
+
+  if (!u || !p) { showLoginErr('Username dan password wajib diisi'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Memverifikasi...';
+  err.classList.remove('show');
+
+  try {
+    const res = await doLogin(u, p);
+    if (res.ok) {
+      saveCreds(u, p);
+      showApp();
+      loadData();
+    } else {
+      showLoginErr(res.message || 'Username atau password salah');
+    }
+  } catch(e) {
+    showLoginErr('Gagal terhubung ke server: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Masuk';
+  }
+}
+
+function showLoginErr(msg) {
+  const err = document.getElementById('loginErr');
+  err.textContent = '✗ ' + msg;
+  err.classList.add('show');
+}
+
+function logout() {
+  clearCreds();
+  showLoginPage();
+  dataMasuk = []; dataKeluar = []; dataRekap = [];
+  document.getElementById('produkSelect').innerHTML = '<option value="">— Pilih Produk —</option>';
+  document.getElementById('kartu-content').innerHTML = '';
+  toast('Berhasil logout', '');
+}
+
+async function loadData() {
+  setSyncState('loading','Memuat data…');
+  const btn=document.getElementById('syncBtn');
+  btn.disabled=true; btn.classList.add('spinning');
+  try {
+    const [rM,rK,rR] = await Promise.all([fetchSheet(SHEETS.masuk),fetchSheet(SHEETS.keluar),fetchSheet(SHEETS.rekap)]);
+
+    dataMasuk=[];
+    for(let i=2;i<rM.length;i++){
+      const r=rM[i]; if(!str(r[2])) continue;
+      dataMasuk.push({tgl:toDate(str(r[1])),tglRaw:num(str(r[1])),namaItem:str(r[2]),namaItemCPB:str(r[3]),netto:str(r[4]),sat:str(r[5]),batch:str(r[6]),qty:num(str(r[7])),catatan:str(r[8])});
+    }
+
+    dataKeluar=[];
+    for(let i=2;i<rK.length;i++){
+      const r=rK[i]; if(!str(r[6])) continue;
+      dataKeluar.push({customer:str(r[1]),noPO:str(r[5]),namaItem:str(r[6]),namaItemCPB:str(r[7]),netto:str(r[8]),sat:str(r[9]),qtyPO:num(str(r[10])),uom:str(r[11]),statusKirim:str(r[12]),tglKirim:toDate(str(r[13])),tglKirimRaw:num(str(r[13])),batch:str(r[14]),qty:num(str(r[15])),tujuan:str(r[16]),catatan:str(r[17])});
+    }
+
+    dataRekap=[];
+    for(let i=2;i<rR.length;i++){
+      const r=rR[i]; if(!str(r[7])) continue;
+      dataRekap.push({no:str(r[0]),customer:str(r[1]),tglPO:toDate(str(r[2])),noPO:str(r[6]),namaItem:str(r[7]),namaItemCPB:str(r[8]),netto:str(r[9]),sat:str(r[10]),qtyPO:num(str(r[11])),uom:str(r[12]),tglKirimHistory:str(r[13]),qtyKirim:num(str(r[14])),statusPO:str(r[15]),catatan:str(r[16])});
+    }
+
+    buildDropdowns();
+    renderRekap();
+    setSyncState('ok',`Sync: ${new Date().toLocaleTimeString('id-ID')}`);
+    toast('✓ Data berhasil dimuat','success');
+  } catch(e) {
+    setSyncState('err','Gagal memuat data');
+    toast('✗ '+e.message,'error');
+    console.error(e);
+  } finally {
+    btn.disabled=false; btn.classList.remove('spinning');
+  }
+}
+
+/* ── DROPDOWNS ── */
+function buildDropdowns() {
+  const prods=[...new Set([...dataMasuk.map(d=>d.namaItem),...dataKeluar.map(d=>d.namaItem)])].filter(Boolean).sort();
+  const sel=document.getElementById('produkSelect');
+  sel.innerHTML='<option value="">— Pilih Produk —</option>'+prods.map(p=>`<option value="${esc(p)}">${p}</option>`).join('');
+
+  const custs=[...new Set(dataRekap.map(d=>d.customer))].filter(Boolean).sort();
+  const csel=document.getElementById('rekapCustomer');
+  csel.innerHTML='<option value="">Semua Customer</option>'+custs.map(c=>`<option value="${esc(c)}">${c}</option>`).join('');
+}
+
+/* ── KARTU STOK ── */
+function renderKartu() {
+  const produk=document.getElementById('produkSelect').value;
+  const container=document.getElementById('kartu-content');
+  if (!produk) {
+    container.innerHTML=`<div class="empty"><div class="empty-gfx">📦</div><div class="empty-title">Pilih Produk</div><div class="empty-sub">Pilih nama produk dari dropdown di atas</div></div>`;
+    return;
+  }
+
+  const mRows=dataMasuk.filter(d=>d.namaItem===produk);
+  const kRows=dataKeluar.filter(d=>d.namaItem===produk);
+
+  const events=[];
+  mRows.forEach(r=>events.push({tglRaw:r.tglRaw,tgl:r.tgl,batch:r.batch,masuk:r.qty,keluar:0,tujuan:'',type:'in',catatan:r.catatan}));
+  kRows.forEach(r=>events.push({tglRaw:r.tglKirimRaw,tgl:r.tglKirim,batch:r.batch,masuk:0,keluar:r.qty,tujuan:r.tujuan||r.customer,type:'out',catatan:r.catatan}));
+  events.sort((a,b)=>a.tglRaw-b.tglRaw||(a.type==='in'?-1:1));
+
+  const batchStock={};
+  const rows=events.map((ev,i)=>{
+    const b=ev.batch||'—';
+    if(!batchStock[b]) batchStock[b]=0;
+    batchStock[b]+=ev.masuk-ev.keluar;
+    return {...ev,sisa:batchStock[b],idx:i+1};
+  });
+
+  const totalIn=mRows.reduce((s,r)=>s+r.qty,0);
+  const totalOut=kRows.reduce((s,r)=>s+r.qty,0);
+  const totalRem=totalIn-totalOut;
+  const cpb=mRows[0]?.namaItemCPB||kRows[0]?.namaItemCPB||'';
+
+  container.innerHTML=`
+    <div class="kartu-header">
+      <div class="kartu-info">
+        <div class="kartu-name">${produk}</div>
+        ${cpb?`<div class="kartu-cpb">${cpb}</div>`:''}
+        <div class="kartu-meta">${rows.length} transaksi · ${mRows.length} masuk · ${kRows.length} keluar</div>
+      </div>
+      <div class="kartu-mini-stats">
+        <div class="mini-stat">
+          <div class="mini-val in">${totalIn.toLocaleString('id-ID')}</div>
+          <div class="mini-lbl">Total Masuk</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-val out">${totalOut.toLocaleString('id-ID')}</div>
+          <div class="mini-lbl">Total Keluar</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-val rem">${totalRem.toLocaleString('id-ID')}</div>
+          <div class="mini-lbl">Sisa Stok</div>
+        </div>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Tipe</th>
+            <th>Tanggal</th>
+            <th>No. Batch</th>
+            <th class="r">Masuk</th>
+            <th class="r">Keluar</th>
+            <th class="r">Sisa</th>
+            <th>Tujuan</th>
+            <th>Catatan</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.length===0
+            ? `<tr><td colspan="9"><div class="empty"><div class="empty-title">Tidak ada data transaksi</div></div></td></tr>`
+            : rows.map(r=>`
+              <tr class="row-${r.type}">
+                <td class="dim" style="font-size:11px;">${r.idx}</td>
+                <td><span class="type-pill ${r.type}">${r.type==='in'?'↑ Masuk':'↓ Keluar'}</span></td>
+                <td class="mono muted" style="font-size:11px;">${r.tgl||'—'}</td>
+                <td>${r.batch&&r.batch!=='—'?`<span class="batch-tag">${r.batch}</span>`:'<span class="dim">—</span>'}</td>
+                <td class="in-val">${r.masuk>0?r.masuk.toLocaleString('id-ID'):'<span class="dim">—</span>'}</td>
+                <td class="out-val">${r.keluar>0?r.keluar.toLocaleString('id-ID'):'<span class="dim">—</span>'}</td>
+                <td class="rem-val" style="color:${r.sisa<0?'var(--rose)':r.sisa===0?'var(--text3)':'var(--text)'}">${r.sisa.toLocaleString('id-ID')}</td>
+                <td class="trunc muted" title="${r.tujuan}">${r.tujuan||'<span class="dim">—</span>'}</td>
+                <td class="trunc dim" title="${r.catatan}">${r.catatan||''}</td>
+              </tr>`).join('')
+          }
+        </tbody>
+      </table>
+    </div>`;
+}
+
+/* ── REKAP PO ── */
+function setStatusFilter(val,el) {
+  statusFilter=val;
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderRekap();
+}
+
+function renderRekap() {
+  const q=document.getElementById('rekapSearch').value.toLowerCase();
+  const cust=document.getElementById('rekapCustomer').value;
+
+  let rows=dataRekap.filter(d=>{
+    if(cust&&d.customer!==cust) return false;
+    if(statusFilter==='OPEN'&&d.statusPO) return false;
+    if(statusFilter&&statusFilter!=='OPEN'&&d.statusPO!==statusFilter) return false;
+    if(q&&!(d.namaItem.toLowerCase().includes(q)||d.noPO.toLowerCase().includes(q)||d.customer.toLowerCase().includes(q)||d.namaItemCPB.toLowerCase().includes(q))) return false;
+    return true;
+  });
+
+  const totalPO=rows.length;
+  const totalQty=rows.reduce((s,r)=>s+r.qtyPO,0);
+  const totalKirim=rows.reduce((s,r)=>s+r.qtyKirim,0);
+  const closed=rows.filter(r=>r.statusPO==='CLOSED').length;
+  const open=rows.filter(r=>!r.statusPO).length;
+
+  document.getElementById('rekapStats').innerHTML=`
+    <div class="stat-card c-teal"><div class="stat-icon">📋</div><div class="stat-val">${totalPO}</div><div class="stat-lbl">Total Item PO</div></div>
+    <div class="stat-card c-amber"><div class="stat-icon">📦</div><div class="stat-val">${totalQty.toLocaleString('id-ID')}</div><div class="stat-lbl">Total Qty PO</div></div>
+    <div class="stat-card c-violet"><div class="stat-icon">🚚</div><div class="stat-val">${totalKirim.toLocaleString('id-ID')}</div><div class="stat-lbl">Total Qty Kirim</div></div>
+    <div class="stat-card c-green"><div class="stat-icon">✅</div><div class="stat-val">${closed}</div><div class="stat-lbl">Closed</div></div>
+    <div class="stat-card c-rose"><div class="stat-icon">⏳</div><div class="stat-val">${open}</div><div class="stat-lbl">Open</div></div>`;
+
+  const tbody=document.getElementById('rekapBody');
+  if (!rows.length) {
+    tbody.innerHTML=`<tr><td colspan="12"><div class="empty"><div class="empty-gfx">📋</div><div class="empty-title">Tidak ada data</div><div class="empty-sub">Coba ubah filter atau kata kunci pencarian</div></div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML=rows.map((r,i)=>{
+    const badge=r.statusPO==='CLOSED'
+      ?`<span class="badge badge-closed">Closed</span>`
+      :r.statusPO==='ON PROSES'
+      ?`<span class="badge badge-proses">On Proses</span>`
+      :r.statusPO
+      ?`<span class="badge badge-other">${r.statusPO}</span>`
+      :`<span class="badge badge-open">Open</span>`;
+    const hist=r.tglKirimHistory?r.tglKirimHistory.replace(/;\s*/g,'<br>'):'—';
+    return `<tr>
+      <td class="dim" style="font-size:11px;">${i+1}</td>
+      <td style="white-space:nowrap;font-size:12px;font-weight:500;">${r.customer}</td>
+      <td class="mono muted" style="font-size:11px;white-space:nowrap;">${r.tglPO}</td>
+      <td class="mono trunc" style="font-size:11px;max-width:170px;" title="${r.noPO}">${r.noPO}</td>
+      <td class="trunc" style="max-width:170px;font-weight:500;" title="${r.namaItem}">${r.namaItem}</td>
+      <td class="trunc muted" style="max-width:200px;font-size:11px;" title="${r.namaItemCPB}">${r.namaItemCPB}</td>
+      <td class="r mono">${r.qtyPO.toLocaleString('id-ID')}</td>
+      <td class="muted">${r.uom}</td>
+      <td style="font-size:11px;color:var(--text2);max-width:220px;">${hist}</td>
+      <td class="r mono">${r.qtyKirim>0?r.qtyKirim.toLocaleString('id-ID'):'<span class="dim">—</span>'}</td>
+      <td>${badge}</td>
+      <td class="trunc dim" style="max-width:130px;font-size:11px;" title="${r.catatan}">${r.catatan||''}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── UI UTILS ── */
+function switchTab(tab) {
+  activeTab=tab;
+  document.querySelectorAll('.nav-tab').forEach((t,i)=>t.classList.toggle('active',(i===0&&tab==='kartu')||(i===1&&tab==='rekap')));
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.getElementById('sec-'+tab).classList.add('active');
+}
+
+function setSyncState(state,text) {
+  document.getElementById('syncDot').className='dot '+state;
+  document.getElementById('syncText').textContent=text;
+}
+
+function toast(msg,type='') {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast'+(type?' '+type:'');
+  requestAnimationFrame(()=>{ t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); });
+}
+
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+// ── INIT: cek login dulu ──
+if (getSavedCreds()) {
+  showApp();
+  loadData();
+} else {
+  showLoginPage();
+}
+</script>
+</body>
+</html>
